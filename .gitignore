@@ -1,0 +1,9 @@
+.idea/
+build/
+vendor/
+bin/
+composer.phar
+phpunit.xml
+cache.properties
+coverage.xml
+.php_cs.cache
