@@ -1,44 +1,39 @@
-Doctrine Service Provider
-=========================
+# Doctrine Service Provider
+[![Latest Stable Version](https://poser.pugx.org/linio/doctrine-service-provider/v/stable.svg)](https://packagist.org/packages/linio/doctrine-service-provider) [![License](https://poser.pugx.org/linio/doctrine-service-provider/license.svg)](https://packagist.org/packages/linio/doctrine-service-provider) [![Build Status](https://secure.travis-ci.org/LinioIT/doctrine-service-provider.png)](http://travis-ci.org/LinioIT/doctrine-service-provider) [![Scrutinizer Code Quality](https://scrutinizer-ci.com/g/LinioIT/doctrine-service-provider/badges/quality-score.png?b=master)](https://scrutinizer-ci.com/g/LinioIT/doctrine-service-provider/?branch=master)
 
 This provider is a complete solution for using Doctrine in Pimple. You can use the
 full ORM or just the DBAL. This project began as a fork of the [dflydev/doctrine-orm-service-provider][6],
-which itself is based heavily on both the core[Doctrine Service Provider][1] and the
+which itself is based heavily on both the core [Doctrine Service Provider][1] and the
 work done by [@docteurklein][2] on the [docteurklein/silex-doctrine-service-providers][3] project.
 
 Some inspiration was also taken from [Doctrine Bundle][4] and [Doctrine Bridge][5].
 
-Changelog
----------
+## Changelog
 
+* 05-03-2019
+    * Updated PHP >=7.1
+    * Updated Doctrine cache types
 * 20-01-2015
     * Implemented second level cache
     * Compatibility with Doctrine 2.5
 
-Install
--------
+## Install
 
-The recommended way to install is [through composer](http://getcomposer.org).
+The recommended way to install [through composer](http://getcomposer.org).
 
-```JSON
-{
-    "require": {
-        "linio/doctrine-service-provider": "0.1.*"
-    }
-}
+```
+$ composer require linio/doctrine-service-provider
 ```
 
-Tests
------
+## Tests
 
 To run the test suite, you need install the dependencies via composer, then
 run PHPUnit.
 
     $ composer install
-    $ phpunit
+    $ composer test
 
-Usage
------
+## Usage
 
 To start, you just need to register the `OrmServiceProvider`. This provider expects
 two services to be registered, **dbs** and **dbs.event_manager**. You can register
@@ -89,8 +84,7 @@ $container->register(new OrmServiceProvider, [
 ]);
 ```
 
-Configuration
--------------
+## Configuration
 
 ### Parameters
 

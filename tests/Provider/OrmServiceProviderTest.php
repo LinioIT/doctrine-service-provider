@@ -1,9 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Linio\Doctrine\Provider;
 
-use Pimple\Container;
 use Doctrine\Common\Proxy\AbstractProxyFactory;
+use Pimple\Container;
 
 class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
 {
@@ -22,15 +24,15 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
             ->method('getEventManager')
             ->will($this->returnValue($eventManager));
 
-        $container['dbs'] = new Container(array(
+        $container['dbs'] = new Container([
             'default' => $connection,
-        ));
+        ]);
 
-        $container['dbs.event_manager'] = new Container(array(
+        $container['dbs.event_manager'] = new Container([
             'default' => $eventManager,
-        ));
+        ]);
 
-        return array($container, $connection, $eventManager);
+        return [$container, $connection, $eventManager];
     }
 
     /**
@@ -38,7 +40,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
      */
     protected function createMockDefaultApp()
     {
-        list($container, $connection, $eventManager) = $this->createMockDefaultAppAndDeps();
+        [$container, $connection, $eventManager] = $this->createMockDefaultAppAndDeps();
 
         return $container;
     }
@@ -46,7 +48,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test registration (test expected class for default implementations).
      */
-    public function testRegisterDefaultImplementations()
+    public function testRegisterDefaultImplementations(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -63,7 +65,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test registration (test equality for defined implementations).
      */
-    public function testRegisterDefinedImplementations()
+    public function testRegisterDefinedImplementations(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -91,7 +93,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test proxy configuration (defaults).
      */
-    public function testProxyConfigurationDefaults()
+    public function testProxyConfigurationDefaults(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -105,7 +107,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test proxy configuration (defined).
      */
-    public function testProxyConfigurationDefined()
+    public function testProxyConfigurationDefined(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -124,7 +126,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $container['orm.default_repository_class'] = $entityRepositoryClassName;
         $container['orm.entity_listener_resolver'] = $entityListenerResolver;
         $container['orm.repository_factory'] = $repositoryFactory;
-        $container['orm.custom.hydration_modes'] = array('mymode' => 'Doctrine\ORM\Internal\Hydration\SimpleObjectHydrator');
+        $container['orm.custom.hydration_modes'] = ['mymode' => 'Doctrine\ORM\Internal\Hydration\SimpleObjectHydrator'];
 
         $this->assertEquals('/path/to/proxies', $container['orm.em.config']->getProxyDir());
         $this->assertEquals('TestDoctrineOrmProxiesNamespace', $container['orm.em.config']->getProxyNamespace());
@@ -139,7 +141,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test Driver Chain locator.
      */
-    public function testMappingDriverChainLocator()
+    public function testMappingDriverChainLocator(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -153,7 +155,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test adding a mapping driver (use default entity manager).
      */
-    public function testAddMappingDriverDefault()
+    public function testAddMappingDriverDefault(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -175,7 +177,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test adding a mapping driver (specify default entity manager by name).
      */
-    public function testAddMappingDriverNamedEntityManager()
+    public function testAddMappingDriverNamedEntityManager(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -197,15 +199,15 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test specifying an invalid cache type (just named).
      */
-    public function testInvalidCacheTypeNamed()
+    public function testInvalidCacheTypeNamed(): void
     {
         $container = $this->createMockDefaultApp();
 
         $container->register(new OrmServiceProvider());
 
-        $container['orm.em.options'] = array(
+        $container['orm.em.options'] = [
             'query_cache' => 'INVALID',
-        );
+        ];
 
         try {
             $container['orm.em'];
@@ -219,17 +221,17 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test specifying an invalid cache type (driver as option).
      */
-    public function testInvalidCacheTypeDriverAsOption()
+    public function testInvalidCacheTypeDriverAsOption(): void
     {
         $container = $this->createMockDefaultApp();
 
         $container->register(new OrmServiceProvider());
 
-        $container['orm.em.options'] = array(
-            'query_cache' => array(
+        $container['orm.em.options'] = [
+            'query_cache' => [
                 'driver' => 'INVALID',
-            ),
-        );
+            ],
+        ];
 
         try {
             $container['orm.em'];
@@ -243,7 +245,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test orm.em_name_from_param_key ().
      */
-    public function testNameFromParamKey()
+    public function testNameFromParamKey(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -260,23 +262,22 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
 
     /**
      * Test specifying an invalid mapping configuration (not an array of arrays).
-     *
-     * @expectedException        \InvalidArgumentException
-     * @expectedExceptionMessage The 'orm.em.options' option 'mappings' should be an array of arrays.
      */
-    public function testInvalidMappingAsOption()
+    public function testInvalidMappingAsOption(): void
     {
         $container = $this->createMockDefaultApp();
 
         $container->register(new OrmServiceProvider());
 
-        $container['orm.em.options'] = array(
-            'mappings' => array(
+        $container['orm.em.options'] = [
+            'mappings' => [
                 'type' => 'annotation',
                 'namespace' => 'Foo\Entities',
-                'path' => __DIR__.'/src/Foo/Entities',
-            ),
-        );
+                'path' => __DIR__ . '/src/Foo/Entities',
+            ],
+        ];
+
+        $this->setExpectedException(\InvalidArgumentException::class, 'The \'orm.em.options\' option \'mappings\' should be an array of arrays.');
 
         $container['orm.ems.config'];
     }
@@ -284,7 +285,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     /**
      * Test if namespace alias can be set through the mapping options.
      */
-    public function testMappingAlias()
+    public function testMappingAlias(): void
     {
         $container = $this->createMockDefaultApp();
 
@@ -293,21 +294,21 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $alias = 'Foo';
         $namespace = 'Foo\Entities';
 
-        $container['orm.em.options'] = array(
-            'mappings' => array(
-                array(
+        $container['orm.em.options'] = [
+            'mappings' => [
+                [
                     'type' => 'annotation',
                     'namespace' => $namespace,
-                    'path' => __DIR__.'/src/Foo/Entities',
+                    'path' => __DIR__ . '/src/Foo/Entities',
                     'alias' => $alias,
-                ),
-            ),
-        );
+                ],
+            ],
+        ];
 
         $this->assertEquals($namespace, $container['orm.em.config']->getEntityNameSpace($alias));
     }
 
-    public function testStrategy()
+    public function testStrategy(): void
     {
         $app = $this->createMockDefaultApp();
 
@@ -324,20 +325,20 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $this->assertEquals($quoteStrategy, $app['orm.em.config']->getQuoteStrategy());
     }
 
-    public function testCustomFunctions()
+    public function testCustomFunctions(): void
     {
         $app = $this->createMockDefaultApp();
 
         $doctrineOrmServiceProvider = new OrmServiceProvider();
         $doctrineOrmServiceProvider->register($app);
 
-        $numericFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', array(), array('mynum'));
-        $stringFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', array(), array('mynum'));
-        $datetimeFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', array(), array('mynum'));
+        $numericFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $stringFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $datetimeFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
 
-        $app['orm.custom.functions.string'] = array('mystring' => $numericFunction);
-        $app['orm.custom.functions.numeric'] = array('mynumeric' => $stringFunction);
-        $app['orm.custom.functions.datetime'] = array('mydatetime' => $datetimeFunction);
+        $app['orm.custom.functions.string'] = ['mystring' => $numericFunction];
+        $app['orm.custom.functions.numeric'] = ['mynumeric' => $stringFunction];
+        $app['orm.custom.functions.datetime'] = ['mydatetime' => $datetimeFunction];
 
         $this->assertEquals($numericFunction, $app['orm.em.config']->getCustomStringFunction('mystring'));
         $this->assertEquals($numericFunction, $app['orm.em.config']->getCustomNumericFunction('mynumeric'));

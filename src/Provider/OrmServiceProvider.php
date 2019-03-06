@@ -1,17 +1,18 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Linio\Doctrine\Provider;
 
-use Doctrine\Common\Cache\ApcCache;
+use Doctrine\Common\Cache\ApcuCache;
 use Doctrine\Common\Cache\ArrayCache;
 use Doctrine\Common\Cache\CacheProvider;
 use Doctrine\Common\Cache\FilesystemCache;
-use Doctrine\Common\Cache\MemcacheCache;
 use Doctrine\Common\Cache\MemcachedCache;
 use Doctrine\Common\Cache\RedisCache;
-use Doctrine\Common\Cache\XcacheCache;
 use Doctrine\Common\Persistence\Mapping\Driver\MappingDriver;
 use Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain;
+use Doctrine\Common\Persistence\Mapping\Driver\StaticPHPDriver;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Cache\DefaultCacheFactory;
 use Doctrine\ORM\Cache\Region\DefaultRegion;
@@ -21,10 +22,8 @@ use Doctrine\ORM\EntityManager;
 use Doctrine\ORM\Mapping\DefaultEntityListenerResolver;
 use Doctrine\ORM\Mapping\DefaultNamingStrategy;
 use Doctrine\ORM\Mapping\DefaultQuoteStrategy;
-use Doctrine\ORM\Mapping\Driver\Driver;
 use Doctrine\ORM\Mapping\Driver\SimplifiedXmlDriver;
 use Doctrine\ORM\Mapping\Driver\SimplifiedYamlDriver;
-use Doctrine\ORM\Mapping\Driver\StaticPHPDriver;
 use Doctrine\ORM\Mapping\Driver\XmlDriver;
 use Doctrine\ORM\Mapping\Driver\YamlDriver;
 use Doctrine\ORM\Repository\DefaultRepositoryFactory;
@@ -33,7 +32,7 @@ use Pimple\ServiceProviderInterface;
 
 class OrmServiceProvider implements ServiceProviderInterface
 {
-    public function register(Container $container)
+    public function register(Container $container): void
     {
         foreach ($this->getOrmDefaults() as $key => $value) {
             if (!isset($container[$key])) {
@@ -48,7 +47,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             'types' => [],
         ];
 
-        $container['orm.ems.options.initializer'] = $container->protect(function () use ($container) {
+        $container['orm.ems.options.initializer'] = $container->protect(function () use ($container): void {
             static $initialized = false;
 
             if ($initialized) {
@@ -58,7 +57,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             $initialized = true;
 
             if (!isset($container['orm.ems.options'])) {
-                $container['orm.ems.options'] = ['default' => isset($container['orm.em.options']) ? $container['orm.em.options'] : []];
+                $container['orm.ems.options'] = ['default' => $container['orm.em.options'] ?? []];
             }
 
             $tmp = $container['orm.ems.options'];
@@ -96,7 +95,7 @@ class OrmServiceProvider implements ServiceProviderInterface
 
                 $ems[$name] = function ($ems) use ($container, $options, $config) {
                     $evm = $container['dbs.event_manager'][$options['connection']];
-                    /* @var $evm \Doctrine\Common\EventManager */
+                    // @var $evm \Doctrine\Common\EventManager
 
                     if (isset($container['orm.ems.listener.interface_to_concrete_class'])) {
                         $evm->addEventSubscriber($container['orm.ems.listener.interface_to_concrete_class']);
@@ -156,9 +155,8 @@ class OrmServiceProvider implements ServiceProviderInterface
                     switch ($entity['type']) {
                         case 'annotation':
                             $useSimpleAnnotationReader =
-                                isset($entity['use_simple_annotation_reader'])
-                                ? $entity['use_simple_annotation_reader']
-                                : true;
+                                $entity['use_simple_annotation_reader']
+                                ?? true;
                             $driver = $config->newDefaultAnnotationDriver((array) $entity['path'], $useSimpleAnnotationReader);
                             $chain->addDriver($driver, $entity['namespace']);
                             break;
@@ -203,7 +201,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             return $configs;
         };
 
-        $container['orm.cache.configurer'] = $container->protect(function ($name, Configuration $config, $options) use ($container) {
+        $container['orm.cache.configurer'] = $container->protect(function ($name, Configuration $config, $options) use ($container): void {
             if (isset($options['second_level'])) {
                 $cacheRegion = new DefaultRegion($name, $container['orm.cache.locator']($name, 'second_level', $options));
                 $regionsConfiguration = new RegionsConfiguration($options['second_level']['ttl'], $options['second_level']['lock_ttl']);
@@ -251,25 +249,6 @@ class OrmServiceProvider implements ServiceProviderInterface
             return $container[$cacheInstanceKey] = $cache;
         });
 
-        $container['orm.cache.factory.backing_memcache'] = $container->protect(function () {
-            return new \Memcache();
-        });
-
-        $container['orm.cache.factory.memcache'] = $container->protect(function ($cacheOptions) use ($container) {
-            if (empty($cacheOptions['host']) || empty($cacheOptions['port'])) {
-                throw new \RuntimeException('Host and port options need to be specified for memcache cache');
-            }
-
-            /** @var \Memcache $memcache */
-            $memcache = $container['orm.cache.factory.backing_memcache']();
-            $memcache->connect($cacheOptions['host'], $cacheOptions['port']);
-
-            $cache = new MemcacheCache();
-            $cache->setMemcache($memcache);
-
-            return $cache;
-        });
-
         $container['orm.cache.factory.backing_memcached'] = $container->protect(function () {
             return new \Memcached();
         });
@@ -312,12 +291,8 @@ class OrmServiceProvider implements ServiceProviderInterface
             return new ArrayCache();
         });
 
-        $container['orm.cache.factory.apc'] = $container->protect(function () {
-            return new ApcCache();
-        });
-
-        $container['orm.cache.factory.xcache'] = $container->protect(function () {
-            return new XcacheCache();
+        $container['orm.cache.factory.apcu'] = $container->protect(function () {
+            return new ApcuCache();
         });
 
         $container['orm.cache.factory.filesystem'] = $container->protect(function ($cacheOptions) {
@@ -330,18 +305,14 @@ class OrmServiceProvider implements ServiceProviderInterface
 
         $container['orm.cache.factory'] = $container->protect(function ($driver, $cacheOptions) use ($container) {
             switch ($driver) {
+                case 'apcu':
+                    return $container['orm.cache.factory.apcu']();
                 case 'array':
                     return $container['orm.cache.factory.array']();
-                case 'apc':
-                    return $container['orm.cache.factory.apc']();
-                case 'xcache':
-                    return $container['orm.cache.factory.xcache']();
-                case 'memcache':
-                    return $container['orm.cache.factory.memcache']($cacheOptions);
-                case 'memcached':
-                    return $container['orm.cache.factory.memcached']($cacheOptions);
                 case 'filesystem':
                     return $container['orm.cache.factory.filesystem']($cacheOptions);
+                case 'memcached':
+                    return $container['orm.cache.factory.memcached']($cacheOptions);
                 case 'redis':
                     return $container['orm.cache.factory.redis']($cacheOptions);
                 default:
@@ -352,7 +323,7 @@ class OrmServiceProvider implements ServiceProviderInterface
         $container['orm.mapping_driver_chain.locator'] = $container->protect(function ($name = null) use ($container) {
             $container['orm.ems.options.initializer']();
 
-            if (null === $name) {
+            if ($name === null) {
                 $name = $container['orm.ems.default'];
             }
 
@@ -368,10 +339,10 @@ class OrmServiceProvider implements ServiceProviderInterface
             return new MappingDriverChain();
         });
 
-        $container['orm.add_mapping_driver'] = $container->protect(function (MappingDriver $mappingDriver, $namespace, $name = null) use ($container) {
+        $container['orm.add_mapping_driver'] = $container->protect(function (MappingDriver $mappingDriver, $namespace, $name = null) use ($container): void {
             $container['orm.ems.options.initializer']();
 
-            if (null === $name) {
+            if ($name === null) {
                 $name = $container['orm.ems.default'];
             }
 
@@ -412,7 +383,6 @@ class OrmServiceProvider implements ServiceProviderInterface
     /**
      * Get default ORM configuration settings.
      *
-     * @param Container $container
      *
      * @return array
      */
