@@ -1,9 +1,8 @@
-.idea/
-build/
-vendor/
-bin/
-composer.phar
-phpunit.xml
-cache.properties
-coverage.xml
-.php_cs.cache
+/.idea
+/build
+/vendor
+/phpunit.xml
+/coverage.xml
+/.php_cs.cache
+/composer.lock
+.phpunit.result.cache

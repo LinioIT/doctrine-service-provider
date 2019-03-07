@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Linio\Doctrine\Provider;
 
 use Doctrine\Common\EventManager;
@@ -10,7 +12,7 @@ use Pimple\ServiceProviderInterface;
 
 class DbalServiceProvider implements ServiceProviderInterface
 {
-    public function register(Container $app)
+    public function register(Container $app): void
     {
         $app['db.default_options'] = [
             'driver' => 'pdo_mysql',
@@ -20,7 +22,7 @@ class DbalServiceProvider implements ServiceProviderInterface
             'password' => null,
         ];
 
-        $app['dbs.options.initializer'] = $app->protect(function () use ($app) {
+        $app['dbs.options.initializer'] = $app->protect(function () use ($app): void {
             static $initialized = false;
 
             if ($initialized) {
@@ -30,7 +32,7 @@ class DbalServiceProvider implements ServiceProviderInterface
             $initialized = true;
 
             if (!isset($app['dbs.options'])) {
-                $app['dbs.options'] = ['default' => isset($app['db.options']) ? $app['db.options'] : []];
+                $app['dbs.options'] = ['default' => $app['db.options'] ?? []];
             }
 
             $tmp = $app['dbs.options'];

@@ -1,0 +1,17 @@
+language: php
+
+php:
+  - 7.1
+
+cache:
+  directories:
+    - vendor
+
+install:
+  - travis_retry composer install --no-interaction --prefer-source
+
+script:
+  - composer test
+
+matrix:
+  fast_finish: true
