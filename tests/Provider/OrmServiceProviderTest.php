@@ -59,7 +59,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getResultCacheImpl());
         $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getMetadataCacheImpl());
         $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getHydrationCacheImpl());
-        $this->assertInstanceOf('Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain', $container['orm.em.config']->getMetadataDriverImpl());
+        $this->assertInstanceOf('Doctrine\Persistence\Mapping\Driver\MappingDriverChain', $container['orm.em.config']->getMetadataDriverImpl());
     }
 
     /**
@@ -73,7 +73,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $resultCache = $this->getMock('Doctrine\Common\Cache\ArrayCache');
         $metadataCache = $this->getMock('Doctrine\Common\Cache\ArrayCache');
 
-        $mappingDriverChain = $this->getMock('Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
 
         $container['orm.cache.instances.default.query'] = $queryCache;
         $container['orm.cache.instances.default.result'] = $resultCache;
@@ -113,8 +113,8 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $entityRepositoryClassName = get_class($this->getMock('Doctrine\Common\Persistence\ObjectRepository'));
-        $metadataFactoryName = get_class($this->getMock('Doctrine\Common\Persistence\Mapping\ClassMetadataFactory'));
+        $entityRepositoryClassName = get_class($this->getMock('Doctrine\Persistence\ObjectRepository'));
+        $metadataFactoryName = get_class($this->getMock('Doctrine\Persistence\Mapping\ClassMetadataFactory'));
 
         $entityListenerResolver = $this->getMock('Doctrine\ORM\Mapping\EntityListenerResolver');
         $repositoryFactory = $this->getMock('Doctrine\ORM\Repository\RepositoryFactory');
@@ -159,9 +159,9 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     {
         $container = $this->createMockDefaultApp();
 
-        $mappingDriver = $this->getMock('Doctrine\Common\Persistence\Mapping\Driver\MappingDriver');
+        $mappingDriver = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
 
-        $mappingDriverChain = $this->getMock('Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
         $mappingDriverChain
             ->expects($this->once())
             ->method('addDriver')
@@ -181,9 +181,9 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     {
         $container = $this->createMockDefaultApp();
 
-        $mappingDriver = $this->getMock('Doctrine\Common\Persistence\Mapping\Driver\MappingDriver');
+        $mappingDriver = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
 
-        $mappingDriverChain = $this->getMock('Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
         $mappingDriverChain
             ->expects($this->once())
             ->method('addDriver')

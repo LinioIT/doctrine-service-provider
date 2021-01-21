@@ -10,9 +10,6 @@ use Doctrine\Common\Cache\CacheProvider;
 use Doctrine\Common\Cache\FilesystemCache;
 use Doctrine\Common\Cache\MemcachedCache;
 use Doctrine\Common\Cache\RedisCache;
-use Doctrine\Common\Persistence\Mapping\Driver\MappingDriver;
-use Doctrine\Common\Persistence\Mapping\Driver\MappingDriverChain;
-use Doctrine\Common\Persistence\Mapping\Driver\StaticPHPDriver;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Cache\DefaultCacheFactory;
 use Doctrine\ORM\Cache\Region\DefaultRegion;
@@ -27,6 +24,9 @@ use Doctrine\ORM\Mapping\Driver\SimplifiedYamlDriver;
 use Doctrine\ORM\Mapping\Driver\XmlDriver;
 use Doctrine\ORM\Mapping\Driver\YamlDriver;
 use Doctrine\ORM\Repository\DefaultRepositoryFactory;
+use Doctrine\Persistence\Mapping\Driver\MappingDriver;
+use Doctrine\Persistence\Mapping\Driver\MappingDriverChain;
+use Doctrine\Persistence\Mapping\Driver\StaticPHPDriver;
 use Pimple\Container;
 use Pimple\ServiceProviderInterface;
 
@@ -143,9 +143,7 @@ class OrmServiceProvider implements ServiceProviderInterface
 
                 foreach ((array) $options['mappings'] as $entity) {
                     if (!is_array($entity)) {
-                        throw new \InvalidArgumentException(
-                            "The 'orm.em.options' option 'mappings' should be an array of arrays."
-                        );
+                        throw new \InvalidArgumentException("The 'orm.em.options' option 'mappings' should be an array of arrays.");
                     }
 
                     if (isset($entity['alias'])) {
@@ -335,7 +333,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             return $container[$cacheInstanceKey] = $container['orm.mapping_driver_chain.factory']($name);
         });
 
-        $container['orm.mapping_driver_chain.factory'] = $container->protect(function ($name) use ($container) {
+        $container['orm.mapping_driver_chain.factory'] = $container->protect(function ($name) {
             return new MappingDriverChain();
         });
 
@@ -382,7 +380,6 @@ class OrmServiceProvider implements ServiceProviderInterface
 
     /**
      * Get default ORM configuration settings.
-     *
      *
      * @return array
      */
