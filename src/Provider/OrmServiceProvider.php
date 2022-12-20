@@ -4,12 +4,8 @@ declare(strict_types=1);
 
 namespace Linio\Doctrine\Provider;
 
-use Doctrine\Common\Cache\ApcuCache;
-use Doctrine\Common\Cache\ArrayCache;
 use Doctrine\Common\Cache\CacheProvider;
-use Doctrine\Common\Cache\FilesystemCache;
-use Doctrine\Common\Cache\MemcachedCache;
-use Doctrine\Common\Cache\RedisCache;
+use Doctrine\Common\Cache\Psr6\DoctrineProvider;
 use Doctrine\DBAL\Types\Type;
 use Doctrine\ORM\Cache\DefaultCacheFactory;
 use Doctrine\ORM\Cache\Region\DefaultRegion;
@@ -27,8 +23,17 @@ use Doctrine\ORM\Repository\DefaultRepositoryFactory;
 use Doctrine\Persistence\Mapping\Driver\MappingDriver;
 use Doctrine\Persistence\Mapping\Driver\MappingDriverChain;
 use Doctrine\Persistence\Mapping\Driver\StaticPHPDriver;
+use InvalidArgumentException;
+use Memcached;
 use Pimple\Container;
 use Pimple\ServiceProviderInterface;
+use Redis;
+use RuntimeException;
+use Symfony\Component\Cache\Adapter\ApcuAdapter;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\Adapter\MemcachedAdapter;
+use Symfony\Component\Cache\Adapter\RedisAdapter;
 
 class OrmServiceProvider implements ServiceProviderInterface
 {
@@ -143,7 +148,7 @@ class OrmServiceProvider implements ServiceProviderInterface
 
                 foreach ((array) $options['mappings'] as $entity) {
                     if (!is_array($entity)) {
-                        throw new \InvalidArgumentException("The 'orm.em.options' option 'mappings' should be an array of arrays.");
+                        throw new InvalidArgumentException("The 'orm.em.options' option 'mappings' should be an array of arrays.");
                     }
 
                     if (isset($entity['alias'])) {
@@ -179,7 +184,7 @@ class OrmServiceProvider implements ServiceProviderInterface
                             $chain->addDriver($driver, $entity['namespace']);
                             break;
                         default:
-                            throw new \InvalidArgumentException(sprintf('"%s" is not a recognized driver', $entity['type']));
+                            throw new InvalidArgumentException(sprintf('"%s" is not a recognized driver', $entity['type']));
                             break;
                     }
                 }
@@ -228,7 +233,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             }
 
             if (!isset($options[$cacheNameKey]['driver'])) {
-                throw new \RuntimeException("No driver specified for '$cacheName'");
+                throw new RuntimeException("No driver specified for '$cacheName'");
             }
 
             $driver = $options[$cacheNameKey]['driver'];
@@ -248,57 +253,51 @@ class OrmServiceProvider implements ServiceProviderInterface
         });
 
         $container['orm.cache.factory.backing_memcached'] = $container->protect(function () {
-            return new \Memcached();
+            return new Memcached();
         });
 
         $container['orm.cache.factory.memcached'] = $container->protect(function ($cacheOptions) use ($container) {
             if (empty($cacheOptions['host']) || empty($cacheOptions['port'])) {
-                throw new \RuntimeException('Host and port options need to be specified for memcached cache');
+                throw new RuntimeException('Host and port options need to be specified for memcached cache');
             }
 
-            /** @var \Memcached $memcached */
+            /** @var Memcached $memcached */
             $memcached = $container['orm.cache.factory.backing_memcached']();
             $memcached->addServer($cacheOptions['host'], $cacheOptions['port']);
 
-            $cache = new MemcachedCache();
-            $cache->setMemcached($memcached);
-
-            return $cache;
+            return DoctrineProvider::wrap(new MemcachedAdapter($memcached));
         });
 
         $container['orm.cache.factory.backing_redis'] = $container->protect(function () {
-            return new \Redis();
+            return new Redis();
         });
 
         $container['orm.cache.factory.redis'] = $container->protect(function ($cacheOptions) use ($container) {
             if (empty($cacheOptions['host']) || empty($cacheOptions['port'])) {
-                throw new \RuntimeException('Host and port options need to be specified for redis cache');
+                throw new RuntimeException('Host and port options need to be specified for redis cache');
             }
 
-            /** @var \Redis $redis */
+            /** @var Redis $redis */
             $redis = $container['orm.cache.factory.backing_redis']();
             $redis->connect($cacheOptions['host'], $cacheOptions['port']);
 
-            $cache = new RedisCache();
-            $cache->setRedis($redis);
-
-            return $cache;
+            return DoctrineProvider::wrap(new RedisAdapter($redis));
         });
 
         $container['orm.cache.factory.array'] = $container->protect(function () {
-            return new ArrayCache();
+            return DoctrineProvider::wrap(new ArrayAdapter());
         });
 
         $container['orm.cache.factory.apcu'] = $container->protect(function () {
-            return new ApcuCache();
+            return DoctrineProvider::wrap(new ApcuAdapter());
         });
 
         $container['orm.cache.factory.filesystem'] = $container->protect(function ($cacheOptions) {
             if (empty($cacheOptions['path'])) {
-                throw new \RuntimeException('FilesystemCache path not defined');
+                throw new RuntimeException('FilesystemCache path not defined');
             }
 
-            return new FilesystemCache($cacheOptions['path']);
+            return DoctrineProvider::wrap(new FilesystemAdapter('', 0, $cacheOptions['path']));
         });
 
         $container['orm.cache.factory'] = $container->protect(function ($driver, $cacheOptions) use ($container) {
@@ -314,7 +313,7 @@ class OrmServiceProvider implements ServiceProviderInterface
                 case 'redis':
                     return $container['orm.cache.factory.redis']($cacheOptions);
                 default:
-                    throw new \RuntimeException("Unsupported cache type '$driver' specified");
+                    throw new RuntimeException("Unsupported cache type '$driver' specified");
             }
         });
 

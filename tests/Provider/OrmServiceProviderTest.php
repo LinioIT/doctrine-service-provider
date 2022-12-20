@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 namespace Linio\Doctrine\Provider;
 
+use Doctrine\Common\Cache\Psr6\DoctrineProvider;
 use Doctrine\Common\Proxy\AbstractProxyFactory;
+use InvalidArgumentException;
+use PHPUnit\Framework\TestCase;
 use Pimple\Container;
+use RuntimeException;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
-class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
+class OrmServiceProviderTest extends TestCase
 {
     protected function createMockDefaultAppAndDeps()
     {
         $container = new Container();
 
-        $eventManager = $this->getMock('Doctrine\Common\EventManager');
+        $eventManager = $this->createMock('Doctrine\Common\EventManager');
         $connection = $this
             ->getMockBuilder('Doctrine\DBAL\Connection')
             ->disableOriginalConstructor()
@@ -55,10 +60,10 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $container->register(new OrmServiceProvider());
 
         $this->assertEquals($container['orm.em'], $container['orm.ems']['default']);
-        $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getQueryCacheImpl());
-        $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getResultCacheImpl());
-        $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getMetadataCacheImpl());
-        $this->assertInstanceOf('Doctrine\Common\Cache\ArrayCache', $container['orm.em.config']->getHydrationCacheImpl());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getQueryCacheImpl()->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getResultCacheImpl()->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getMetadataCacheImpl()->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getHydrationCacheImpl()->getPool());
         $this->assertInstanceOf('Doctrine\Persistence\Mapping\Driver\MappingDriverChain', $container['orm.em.config']->getMetadataDriverImpl());
     }
 
@@ -69,11 +74,11 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     {
         $container = $this->createMockDefaultApp();
 
-        $queryCache = $this->getMock('Doctrine\Common\Cache\ArrayCache');
-        $resultCache = $this->getMock('Doctrine\Common\Cache\ArrayCache');
-        $metadataCache = $this->getMock('Doctrine\Common\Cache\ArrayCache');
+        $queryCache = DoctrineProvider::wrap(new ArrayAdapter());
+        $resultCache = DoctrineProvider::wrap(new ArrayAdapter());
+        $metadataCache = DoctrineProvider::wrap(new ArrayAdapter());
 
-        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->createMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
 
         $container['orm.cache.instances.default.query'] = $queryCache;
         $container['orm.cache.instances.default.result'] = $resultCache;
@@ -99,7 +104,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $this->assertContains('/../../../../../../../cache/doctrine/proxies', $container['orm.em.config']->getProxyDir());
+        $this->assertStringContainsString('/../../../../../../../cache/doctrine/proxies', $container['orm.em.config']->getProxyDir());
         $this->assertEquals('DoctrineProxy', $container['orm.em.config']->getProxyNamespace());
         $this->assertEquals(AbstractProxyFactory::AUTOGENERATE_ALWAYS, $container['orm.em.config']->getAutoGenerateProxyClasses());
     }
@@ -113,11 +118,11 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $entityRepositoryClassName = get_class($this->getMock('Doctrine\Persistence\ObjectRepository'));
-        $metadataFactoryName = get_class($this->getMock('Doctrine\Persistence\Mapping\ClassMetadataFactory'));
+        $entityRepositoryClassName = get_class($this->createMock('Doctrine\Persistence\ObjectRepository'));
+        $metadataFactoryName = get_class($this->createMock('Doctrine\Persistence\Mapping\ClassMetadataFactory'));
 
-        $entityListenerResolver = $this->getMock('Doctrine\ORM\Mapping\EntityListenerResolver');
-        $repositoryFactory = $this->getMock('Doctrine\ORM\Repository\RepositoryFactory');
+        $entityListenerResolver = $this->createMock('Doctrine\ORM\Mapping\EntityListenerResolver');
+        $repositoryFactory = $this->createMock('Doctrine\ORM\Repository\RepositoryFactory');
 
         $container['orm.proxies_dir'] = '/path/to/proxies';
         $container['orm.proxies_namespace'] = 'TestDoctrineOrmProxiesNamespace';
@@ -159,9 +164,9 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     {
         $container = $this->createMockDefaultApp();
 
-        $mappingDriver = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
+        $mappingDriver = $this->createMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
 
-        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->createMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
         $mappingDriverChain
             ->expects($this->once())
             ->method('addDriver')
@@ -181,9 +186,9 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
     {
         $container = $this->createMockDefaultApp();
 
-        $mappingDriver = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
+        $mappingDriver = $this->createMock('Doctrine\Persistence\Mapping\Driver\MappingDriver');
 
-        $mappingDriverChain = $this->getMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
+        $mappingDriverChain = $this->createMock('Doctrine\Persistence\Mapping\Driver\MappingDriverChain');
         $mappingDriverChain
             ->expects($this->once())
             ->method('addDriver')
@@ -213,7 +218,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
             $container['orm.em'];
 
             $this->fail('Expected invalid query cache driver exception');
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             $this->assertEquals("Unsupported cache type 'INVALID' specified", $e->getMessage());
         }
     }
@@ -237,7 +242,7 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
             $container['orm.em'];
 
             $this->fail('Expected invalid query cache driver exception');
-        } catch (\RuntimeException $e) {
+        } catch (RuntimeException $e) {
             $this->assertEquals("Unsupported cache type 'INVALID' specified", $e->getMessage());
         }
     }
@@ -277,7 +282,8 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
             ],
         ];
 
-        $this->setExpectedException(\InvalidArgumentException::class, 'The \'orm.em.options\' option \'mappings\' should be an array of arrays.');
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('The \'orm.em.options\' option \'mappings\' should be an array of arrays.');
 
         $container['orm.ems.config'];
     }
@@ -315,8 +321,8 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $doctrineOrmServiceProvider = new OrmServiceProvider();
         $doctrineOrmServiceProvider->register($app);
 
-        $namingStrategy = $this->getMock('Doctrine\ORM\Mapping\DefaultNamingStrategy');
-        $quoteStrategy = $this->getMock('Doctrine\ORM\Mapping\DefaultQuoteStrategy');
+        $namingStrategy = $this->createMock('Doctrine\ORM\Mapping\DefaultNamingStrategy');
+        $quoteStrategy = $this->createMock('Doctrine\ORM\Mapping\DefaultQuoteStrategy');
 
         $app['orm.strategy.naming'] = $namingStrategy;
         $app['orm.strategy.quote'] = $quoteStrategy;
@@ -332,9 +338,9 @@ class OrmServiceProviderTest extends \PHPUnit_Framework_TestCase
         $doctrineOrmServiceProvider = new OrmServiceProvider();
         $doctrineOrmServiceProvider->register($app);
 
-        $numericFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
-        $stringFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
-        $datetimeFunction = $this->getMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $numericFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $stringFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $datetimeFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
 
         $app['orm.custom.functions.string'] = ['mystring' => $numericFunction];
         $app['orm.custom.functions.numeric'] = ['mynumeric' => $stringFunction];

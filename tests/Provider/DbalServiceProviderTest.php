@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace Linio\Doctrine\Provider;
 
+use PDO;
+use PHPUnit\Framework\TestCase;
 use Pimple\Container;
 
-class DbalServiceProviderTest extends \PHPUnit_Framework_TestCase
+class DbalServiceProviderTest extends TestCase
 {
     public function testOptionsInitializer(): void
     {
@@ -18,7 +20,7 @@ class DbalServiceProviderTest extends \PHPUnit_Framework_TestCase
 
     public function testSingleConnection(): void
     {
-        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+        if (!in_array('sqlite', PDO::getAvailableDrivers())) {
             $this->markTestSkipped('pdo_sqlite is not available');
         }
 
@@ -31,15 +33,14 @@ class DbalServiceProviderTest extends \PHPUnit_Framework_TestCase
         $params = $db->getParams();
         $this->assertArrayHasKey('memory', $params);
         $this->assertTrue($params['memory']);
-        $this->assertInstanceof('Doctrine\DBAL\Driver\PDOSqlite\Driver', $db->getDriver());
-        $this->assertEquals(22, $container['db']->fetchColumn('SELECT 22'));
-
+        $this->assertInstanceof('Doctrine\DBAL\Driver\PDO\Sqlite\Driver', $db->getDriver());
+        $this->assertEquals(22, $container['db']->fetchOne('SELECT 22'));
         $this->assertSame($container['dbs']['default'], $db);
     }
 
     public function testMultipleConnections(): void
     {
-        if (!in_array('sqlite', \PDO::getAvailableDrivers())) {
+        if (!in_array('sqlite', PDO::getAvailableDrivers())) {
             $this->markTestSkipped('pdo_sqlite is not available');
         }
 
@@ -55,8 +56,8 @@ class DbalServiceProviderTest extends \PHPUnit_Framework_TestCase
         $params = $db->getParams();
         $this->assertArrayHasKey('memory', $params);
         $this->assertTrue($params['memory']);
-        $this->assertInstanceof('Doctrine\DBAL\Driver\PDOSqlite\Driver', $db->getDriver());
-        $this->assertEquals(22, $container['db']->fetchColumn('SELECT 22'));
+        $this->assertInstanceof('Doctrine\DBAL\Driver\PDO\Sqlite\Driver', $db->getDriver());
+        $this->assertEquals(22, $container['db']->fetchOne('SELECT 22'));
 
         $this->assertSame($container['dbs']['sqlite1'], $db);
 
