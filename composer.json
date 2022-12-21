@@ -32,11 +32,12 @@
         }
     },
     "scripts": {
-        "test": [
+        "check": [
             "@lint:check",
-            "@phpunit"
+            "@static-analysis",
+            "@test"
         ],
-        "phpunit": "vendor/bin/phpunit --verbose",
+        "test": "vendor/bin/phpunit --verbose",
         "lint": "php-cs-fixer fix --verbose --show-progress=dots",
         "lint:check": "php-cs-fixer fix --dry-run --verbose --show-progress=dots",
         "static-analysis": [
