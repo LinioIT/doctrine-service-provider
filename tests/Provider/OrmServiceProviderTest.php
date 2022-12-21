@@ -5,7 +5,11 @@ declare(strict_types=1);
 namespace Linio\Doctrine\Provider;
 
 use Doctrine\Common\Cache\Psr6\DoctrineProvider;
+use Doctrine\Common\EventManager;
 use Doctrine\Common\Proxy\AbstractProxyFactory;
+use Doctrine\DBAL\Connection;
+use Doctrine\ORM\Configuration;
+use Doctrine\ORM\EntityManager;
 use InvalidArgumentException;
 use PHPUnit\Framework\TestCase;
 use Pimple\Container;
@@ -14,7 +18,10 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 class OrmServiceProviderTest extends TestCase
 {
-    protected function createMockDefaultAppAndDeps()
+    /**
+     * @return array{Container, Connection, EventManager}
+     */
+    protected function createMockDefaultAppAndDeps(): array
     {
         $container = new Container();
 
@@ -40,10 +47,7 @@ class OrmServiceProviderTest extends TestCase
         return [$container, $connection, $eventManager];
     }
 
-    /**
-     * @return Container
-     */
-    protected function createMockDefaultApp()
+    protected function createMockDefaultApp(): Container
     {
         [$container, $connection, $eventManager] = $this->createMockDefaultAppAndDeps();
 
@@ -59,12 +63,28 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $this->assertEquals($container['orm.em'], $container['orm.ems']['default']);
-        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getQueryCacheImpl()->getPool());
-        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getResultCacheImpl()->getPool());
-        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getMetadataCacheImpl()->getPool());
-        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $container['orm.em.config']->getHydrationCacheImpl()->getPool());
-        $this->assertInstanceOf('Doctrine\Persistence\Mapping\Driver\MappingDriverChain', $container['orm.em.config']->getMetadataDriverImpl());
+        /** @var EntityManager[] $entityManagers */
+        $entityManagers = $container['orm.ems'];
+
+        $this->assertEquals($container['orm.em'], $entityManagers['default']);
+
+        /** @var Configuration $ormEmConfig */
+        $ormEmConfig = $container['orm.em.config'];
+
+        /** @var DoctrineProvider $queryCacheImpl */
+        $queryCacheImpl = $ormEmConfig->getQueryCacheImpl();
+        /** @var DoctrineProvider $resultCacheImpl */
+        $resultCacheImpl = $ormEmConfig->getResultCacheImpl();
+        /** @var DoctrineProvider $metadataCacheImpl */
+        $metadataCacheImpl = $ormEmConfig->getMetadataCacheImpl();
+        /** @var DoctrineProvider $hydrationCacheImpl */
+        $hydrationCacheImpl = $ormEmConfig->getHydrationCacheImpl();
+
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $queryCacheImpl->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $resultCacheImpl->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $metadataCacheImpl->getPool());
+        $this->assertInstanceOf('Symfony\Component\Cache\Adapter\ArrayAdapter', $hydrationCacheImpl->getPool());
+        $this->assertInstanceOf('Doctrine\Persistence\Mapping\Driver\MappingDriverChain', $ormEmConfig->getMetadataDriverImpl());
     }
 
     /**
@@ -88,11 +108,17 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $this->assertEquals($container['orm.em'], $container['orm.ems']['default']);
-        $this->assertEquals($queryCache, $container['orm.em.config']->getQueryCacheImpl());
-        $this->assertEquals($resultCache, $container['orm.em.config']->getResultCacheImpl());
-        $this->assertEquals($metadataCache, $container['orm.em.config']->getMetadataCacheImpl());
-        $this->assertEquals($mappingDriverChain, $container['orm.em.config']->getMetadataDriverImpl());
+        /** @var EntityManager[] $entityManagers */
+        $entityManagers = $container['orm.ems'];
+
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $container['orm.em.config'];
+
+        $this->assertEquals($container['orm.em'], $entityManagers['default']);
+        $this->assertEquals($queryCache, $entityManagerConfig->getQueryCacheImpl());
+        $this->assertEquals($resultCache, $entityManagerConfig->getResultCacheImpl());
+        $this->assertEquals($metadataCache, $entityManagerConfig->getMetadataCacheImpl());
+        $this->assertEquals($mappingDriverChain, $entityManagerConfig->getMetadataDriverImpl());
     }
 
     /**
@@ -104,9 +130,15 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $this->assertStringContainsString('/../../../../../../../cache/doctrine/proxies', $container['orm.em.config']->getProxyDir());
-        $this->assertEquals('DoctrineProxy', $container['orm.em.config']->getProxyNamespace());
-        $this->assertEquals(AbstractProxyFactory::AUTOGENERATE_ALWAYS, $container['orm.em.config']->getAutoGenerateProxyClasses());
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $container['orm.em.config'];
+
+        /** @var string $proxyDir */
+        $proxyDir = $entityManagerConfig->getProxyDir();
+
+        $this->assertStringContainsString('/../../../../../../../cache/doctrine/proxies', $proxyDir);
+        $this->assertEquals('DoctrineProxy', $entityManagerConfig->getProxyNamespace());
+        $this->assertEquals(AbstractProxyFactory::AUTOGENERATE_ALWAYS, $entityManagerConfig->getAutoGenerateProxyClasses());
     }
 
     /**
@@ -133,14 +165,17 @@ class OrmServiceProviderTest extends TestCase
         $container['orm.repository_factory'] = $repositoryFactory;
         $container['orm.custom.hydration_modes'] = ['mymode' => 'Doctrine\ORM\Internal\Hydration\SimpleObjectHydrator'];
 
-        $this->assertEquals('/path/to/proxies', $container['orm.em.config']->getProxyDir());
-        $this->assertEquals('TestDoctrineOrmProxiesNamespace', $container['orm.em.config']->getProxyNamespace());
-        $this->assertEquals(AbstractProxyFactory::AUTOGENERATE_NEVER, $container['orm.em.config']->getAutoGenerateProxyClasses());
-        $this->assertEquals($metadataFactoryName, $container['orm.em.config']->getClassMetadataFactoryName());
-        $this->assertEquals($entityRepositoryClassName, $container['orm.em.config']->getDefaultRepositoryClassName());
-        $this->assertEquals($entityListenerResolver, $container['orm.em.config']->getEntityListenerResolver());
-        $this->assertEquals($repositoryFactory, $container['orm.em.config']->getRepositoryFactory());
-        $this->assertEquals('Doctrine\ORM\Internal\Hydration\SimpleObjectHydrator', $container['orm.em.config']->getCustomHydrationMode('mymode'));
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $container['orm.em.config'];
+
+        $this->assertEquals('/path/to/proxies', $entityManagerConfig->getProxyDir());
+        $this->assertEquals('TestDoctrineOrmProxiesNamespace', $entityManagerConfig->getProxyNamespace());
+        $this->assertEquals(AbstractProxyFactory::AUTOGENERATE_NEVER, $entityManagerConfig->getAutoGenerateProxyClasses());
+        $this->assertEquals($metadataFactoryName, $entityManagerConfig->getClassMetadataFactoryName());
+        $this->assertEquals($entityRepositoryClassName, $entityManagerConfig->getDefaultRepositoryClassName());
+        $this->assertEquals($entityListenerResolver, $entityManagerConfig->getEntityListenerResolver());
+        $this->assertEquals($repositoryFactory, $entityManagerConfig->getRepositoryFactory());
+        $this->assertEquals('Doctrine\ORM\Internal\Hydration\SimpleObjectHydrator', $entityManagerConfig->getCustomHydrationMode('mymode'));
     }
 
     /**
@@ -152,9 +187,16 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $default = $container['orm.mapping_driver_chain.locator']();
-        $this->assertEquals($default, $container['orm.mapping_driver_chain.locator']('default'));
-        $this->assertEquals($default, $container['orm.em.config']->getMetadataDriverImpl());
+        /** @var callable $mappingDriverChainLocator */
+        $mappingDriverChainLocator = $container['orm.mapping_driver_chain.locator'];
+
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $container['orm.em.config'];
+
+        $default = $mappingDriverChainLocator();
+
+        $this->assertEquals($default, $mappingDriverChainLocator('default'));
+        $this->assertEquals($default, $entityManagerConfig->getMetadataDriverImpl());
     }
 
     /**
@@ -176,7 +218,10 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $container['orm.add_mapping_driver']($mappingDriver, 'Test\Namespace');
+        /** @var callable $addMappingDriver */
+        $addMappingDriver = $container['orm.add_mapping_driver'];
+
+        $addMappingDriver($mappingDriver, 'Test\Namespace');
     }
 
     /**
@@ -198,7 +243,10 @@ class OrmServiceProviderTest extends TestCase
 
         $container->register(new OrmServiceProvider());
 
-        $container['orm.add_mapping_driver']($mappingDriver, 'Test\Namespace');
+        /** @var callable $addMappingDriver */
+        $addMappingDriver = $container['orm.add_mapping_driver'];
+
+        $addMappingDriver($mappingDriver, 'Test\Namespace');
     }
 
     /**
@@ -215,7 +263,7 @@ class OrmServiceProviderTest extends TestCase
         ];
 
         try {
-            $container['orm.em'];
+            $entityManager = $container['orm.em'];
 
             $this->fail('Expected invalid query cache driver exception');
         } catch (RuntimeException $e) {
@@ -239,7 +287,7 @@ class OrmServiceProviderTest extends TestCase
         ];
 
         try {
-            $container['orm.em'];
+            $entityManager = $container['orm.em'];
 
             $this->fail('Expected invalid query cache driver exception');
         } catch (RuntimeException $e) {
@@ -260,9 +308,12 @@ class OrmServiceProviderTest extends TestCase
 
         $container['orm.ems.default'] = 'foo';
 
+        /** @var callable $nameFomParamKey */
+        $nameFomParamKey = $container['orm.em_name_from_param_key'];
+
         $this->assertEquals('foo', $container['orm.ems.default']);
-        $this->assertEquals('foo', $container['orm.em_name_from_param_key']('my.bar'));
-        $this->assertEquals('baz', $container['orm.em_name_from_param_key']('my.baz'));
+        $this->assertEquals('foo', $nameFomParamKey('my.bar'));
+        $this->assertEquals('baz', $nameFomParamKey('my.baz'));
     }
 
     /**
@@ -285,7 +336,7 @@ class OrmServiceProviderTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('The \'orm.em.options\' option \'mappings\' should be an array of arrays.');
 
-        $container['orm.ems.config'];
+        $entityManagersConfig = $container['orm.ems.config'];
     }
 
     /**
@@ -311,7 +362,10 @@ class OrmServiceProviderTest extends TestCase
             ],
         ];
 
-        $this->assertEquals($namespace, $container['orm.em.config']->getEntityNameSpace($alias));
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $container['orm.em.config'];
+
+        $this->assertEquals($namespace, $entityManagerConfig->getEntityNameSpace($alias));
     }
 
     public function testStrategy(): void
@@ -327,8 +381,11 @@ class OrmServiceProviderTest extends TestCase
         $app['orm.strategy.naming'] = $namingStrategy;
         $app['orm.strategy.quote'] = $quoteStrategy;
 
-        $this->assertEquals($namingStrategy, $app['orm.em.config']->getNamingStrategy());
-        $this->assertEquals($quoteStrategy, $app['orm.em.config']->getQuoteStrategy());
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $app['orm.em.config'];
+
+        $this->assertEquals($namingStrategy, $entityManagerConfig->getNamingStrategy());
+        $this->assertEquals($quoteStrategy, $entityManagerConfig->getQuoteStrategy());
     }
 
     public function testCustomFunctions(): void
@@ -338,16 +395,19 @@ class OrmServiceProviderTest extends TestCase
         $doctrineOrmServiceProvider = new OrmServiceProvider();
         $doctrineOrmServiceProvider->register($app);
 
-        $numericFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
-        $stringFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
-        $datetimeFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode', [], ['mynum']);
+        $numericFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode');
+        $stringFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode');
+        $datetimeFunction = $this->createMock('Doctrine\ORM\Query\AST\Functions\FunctionNode');
 
         $app['orm.custom.functions.string'] = ['mystring' => $numericFunction];
         $app['orm.custom.functions.numeric'] = ['mynumeric' => $stringFunction];
         $app['orm.custom.functions.datetime'] = ['mydatetime' => $datetimeFunction];
 
-        $this->assertEquals($numericFunction, $app['orm.em.config']->getCustomStringFunction('mystring'));
-        $this->assertEquals($numericFunction, $app['orm.em.config']->getCustomNumericFunction('mynumeric'));
-        $this->assertEquals($numericFunction, $app['orm.em.config']->getCustomDatetimeFunction('mydatetime'));
+        /** @var Configuration $entityManagerConfig */
+        $entityManagerConfig = $app['orm.em.config'];
+
+        $this->assertEquals($numericFunction, $entityManagerConfig->getCustomStringFunction('mystring'));
+        $this->assertEquals($numericFunction, $entityManagerConfig->getCustomNumericFunction('mynumeric'));
+        $this->assertEquals($numericFunction, $entityManagerConfig->getCustomDatetimeFunction('mydatetime'));
     }
 }

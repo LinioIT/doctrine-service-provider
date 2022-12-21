@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Linio\Doctrine\Provider;
 
+use Doctrine\DBAL\Connection;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Pimple\Container;
@@ -15,7 +16,10 @@ class DbalServiceProviderTest extends TestCase
         $container = new Container();
         $container->register(new DbalServiceProvider());
 
-        $this->assertEquals($container['db.default_options'], $container['db']->getParams());
+        /** @var Connection $db */
+        $db = $container['db'];
+
+        $this->assertEquals($container['db.default_options'], $db->getParams());
     }
 
     public function testSingleConnection(): void
@@ -29,13 +33,20 @@ class DbalServiceProviderTest extends TestCase
             'db.options' => ['driver' => 'pdo_sqlite', 'memory' => true],
         ]);
 
+        /** @var Connection $db */
         $db = $container['db'];
+
+        /** @var Connection[] $dbs */
+        $dbs = $container['dbs'];
+
+        /** @var mixed[] $params */
         $params = $db->getParams();
+
         $this->assertArrayHasKey('memory', $params);
         $this->assertTrue($params['memory']);
         $this->assertInstanceof('Doctrine\DBAL\Driver\PDO\Sqlite\Driver', $db->getDriver());
-        $this->assertEquals(22, $container['db']->fetchOne('SELECT 22'));
-        $this->assertSame($container['dbs']['default'], $db);
+        $this->assertEquals(22, $db->fetchOne('SELECT 22'));
+        $this->assertSame($dbs['default'], $db);
     }
 
     public function testMultipleConnections(): void
@@ -52,17 +63,27 @@ class DbalServiceProviderTest extends TestCase
             ],
         ]);
 
+        /** @var Connection $db */
         $db = $container['db'];
+
+        /** @var Connection[] $dbs */
+        $dbs = $container['dbs'];
+
+        /** @var mixed[] $params */
         $params = $db->getParams();
+
         $this->assertArrayHasKey('memory', $params);
         $this->assertTrue($params['memory']);
         $this->assertInstanceof('Doctrine\DBAL\Driver\PDO\Sqlite\Driver', $db->getDriver());
-        $this->assertEquals(22, $container['db']->fetchOne('SELECT 22'));
+        $this->assertEquals(22, $db->fetchOne('SELECT 22'));
 
-        $this->assertSame($container['dbs']['sqlite1'], $db);
+        $this->assertSame($dbs['sqlite1'], $db);
 
-        $db2 = $container['dbs']['sqlite2'];
+        $db2 = $dbs['sqlite2'];
+
+        /** @var mixed[] $params */
         $params = $db2->getParams();
+
         $this->assertArrayHasKey('path', $params);
         $this->assertEquals(sys_get_temp_dir() . '/silex', $params['path']);
     }
