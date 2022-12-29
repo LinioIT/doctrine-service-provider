@@ -4,13 +4,10 @@ declare(strict_types=1);
 
 namespace Linio\Doctrine\Provider;
 
-use Doctrine\Common\Cache\ApcuCache;
-use Doctrine\Common\Cache\ArrayCache;
 use Doctrine\Common\Cache\CacheProvider;
-use Doctrine\Common\Cache\FilesystemCache;
-use Doctrine\Common\Cache\MemcachedCache;
-use Doctrine\Common\Cache\RedisCache;
+use Doctrine\Common\Cache\Psr6\DoctrineProvider;
 use Doctrine\DBAL\Types\Type;
+use Doctrine\ORM\Cache\CacheConfiguration;
 use Doctrine\ORM\Cache\DefaultCacheFactory;
 use Doctrine\ORM\Cache\Region\DefaultRegion;
 use Doctrine\ORM\Cache\RegionsConfiguration;
@@ -27,8 +24,17 @@ use Doctrine\ORM\Repository\DefaultRepositoryFactory;
 use Doctrine\Persistence\Mapping\Driver\MappingDriver;
 use Doctrine\Persistence\Mapping\Driver\MappingDriverChain;
 use Doctrine\Persistence\Mapping\Driver\StaticPHPDriver;
+use InvalidArgumentException;
+use Memcached;
 use Pimple\Container;
 use Pimple\ServiceProviderInterface;
+use Redis;
+use RuntimeException;
+use Symfony\Component\Cache\Adapter\ApcuAdapter;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Cache\Adapter\FilesystemAdapter;
+use Symfony\Component\Cache\Adapter\MemcachedAdapter;
+use Symfony\Component\Cache\Adapter\RedisAdapter;
 
 class OrmServiceProvider implements ServiceProviderInterface
 {
@@ -60,9 +66,15 @@ class OrmServiceProvider implements ServiceProviderInterface
                 $container['orm.ems.options'] = ['default' => $container['orm.em.options'] ?? []];
             }
 
+            /** @var mixed[] $tmp */
             $tmp = $container['orm.ems.options'];
+
+            /** @var mixed[] $defaultOptions */
+            $defaultOptions = $container['orm.em.default_options'];
+
+            /** @var mixed[] $options */
             foreach ($tmp as $name => &$options) {
-                $options = array_replace($container['orm.em.default_options'], $options);
+                $options = array_replace($defaultOptions, $options);
 
                 if (!isset($container['orm.ems.default'])) {
                     $container['orm.ems.default'] = $name;
@@ -71,8 +83,11 @@ class OrmServiceProvider implements ServiceProviderInterface
             $container['orm.ems.options'] = $tmp;
         });
 
-        $container['orm.em_name_from_param_key'] = $container->protect(function ($paramKey) use ($container) {
-            $container['orm.ems.options.initializer']();
+        /** @var callable $ormEmsInitializer */
+        $ormEmsInitializer = $container['orm.ems.options.initializer'];
+
+        $container['orm.em_name_from_param_key'] = $container->protect(function ($paramKey) use ($container, $ormEmsInitializer) {
+            $ormEmsInitializer();
 
             if (isset($container[$paramKey])) {
                 return $container[$paramKey];
@@ -81,8 +96,8 @@ class OrmServiceProvider implements ServiceProviderInterface
             return $container['orm.ems.default'];
         });
 
-        $container['orm.ems'] = function ($container) {
-            $container['orm.ems.options.initializer']();
+        $container['orm.ems'] = function ($container) use ($ormEmsInitializer) {
+            $ormEmsInitializer();
 
             $ems = new Container();
             foreach ($container['orm.ems.options'] as $name => $options) {
@@ -112,8 +127,8 @@ class OrmServiceProvider implements ServiceProviderInterface
             return $ems;
         };
 
-        $container['orm.ems.config'] = function ($container) {
-            $container['orm.ems.options.initializer']();
+        $container['orm.ems.config'] = function ($container) use ($ormEmsInitializer) {
+            $ormEmsInitializer();
 
             $configs = new Container();
             foreach ($container['orm.ems.options'] as $name => $options) {
@@ -143,7 +158,7 @@ class OrmServiceProvider implements ServiceProviderInterface
 
                 foreach ((array) $options['mappings'] as $entity) {
                     if (!is_array($entity)) {
-                        throw new \InvalidArgumentException("The 'orm.em.options' option 'mappings' should be an array of arrays.");
+                        throw new InvalidArgumentException("The 'orm.em.options' option 'mappings' should be an array of arrays.");
                     }
 
                     if (isset($entity['alias'])) {
@@ -179,8 +194,7 @@ class OrmServiceProvider implements ServiceProviderInterface
                             $chain->addDriver($driver, $entity['namespace']);
                             break;
                         default:
-                            throw new \InvalidArgumentException(sprintf('"%s" is not a recognized driver', $entity['type']));
-                            break;
+                            throw new InvalidArgumentException(sprintf('"%s" is not a recognized driver', $entity['type']));
                     }
                 }
                 $config->setMetadataDriverImpl($chain);
@@ -200,18 +214,23 @@ class OrmServiceProvider implements ServiceProviderInterface
         };
 
         $container['orm.cache.configurer'] = $container->protect(function ($name, Configuration $config, $options) use ($container): void {
+            /** @var callable $ormCacheLocator */
+            $ormCacheLocator = $container['orm.cache.locator'];
+
             if (isset($options['second_level'])) {
-                $cacheRegion = new DefaultRegion($name, $container['orm.cache.locator']($name, 'second_level', $options));
+                $cacheRegion = new DefaultRegion($name, $ormCacheLocator($name, 'second_level', $options));
                 $regionsConfiguration = new RegionsConfiguration($options['second_level']['ttl'], $options['second_level']['lock_ttl']);
-                $cacheFactory = new DefaultCacheFactory($regionsConfiguration, $container['orm.cache.locator']($name, 'second_level', $options));
+                $cacheFactory = new DefaultCacheFactory($regionsConfiguration, $ormCacheLocator($name, 'second_level', $options));
                 $config->setSecondLevelCacheEnabled();
-                $config->getSecondLevelCacheConfiguration()->setCacheFactory($cacheFactory);
+                /** @var CacheConfiguration $secondLevelCacheConfig */
+                $secondLevelCacheConfig = $config->getSecondLevelCacheConfiguration();
+                $secondLevelCacheConfig->setCacheFactory($cacheFactory);
             }
 
-            $config->setMetadataCacheImpl($container['orm.cache.locator']($name, 'metadata', $options));
-            $config->setQueryCacheImpl($container['orm.cache.locator']($name, 'query', $options));
-            $config->setResultCacheImpl($container['orm.cache.locator']($name, 'result', $options));
-            $config->setHydrationCacheImpl($container['orm.cache.locator']($name, 'hydration', $options));
+            $config->setMetadataCacheImpl($ormCacheLocator($name, 'metadata', $options));
+            $config->setQueryCacheImpl($ormCacheLocator($name, 'query', $options));
+            $config->setResultCacheImpl($ormCacheLocator($name, 'result', $options));
+            $config->setHydrationCacheImpl($ormCacheLocator($name, 'hydration', $options));
         });
 
         $container['orm.cache.locator'] = $container->protect(function ($name, $cacheName, $options) use ($container) {
@@ -228,7 +247,7 @@ class OrmServiceProvider implements ServiceProviderInterface
             }
 
             if (!isset($options[$cacheNameKey]['driver'])) {
-                throw new \RuntimeException("No driver specified for '$cacheName'");
+                throw new RuntimeException("No driver specified for '$cacheName'");
             }
 
             $driver = $options[$cacheNameKey]['driver'];
@@ -238,7 +257,9 @@ class OrmServiceProvider implements ServiceProviderInterface
                 return $container[$cacheInstanceKey];
             }
 
-            $cache = $container['orm.cache.factory']($driver, $options[$cacheNameKey]);
+            /** @var callable $cacheFactory */
+            $cacheFactory = $container['orm.cache.factory'];
+            $cache = $cacheFactory($driver, $options[$cacheNameKey]);
 
             if (isset($options['cache_namespace']) && $cache instanceof CacheProvider) {
                 $cache->setNamespace($options['cache_namespace']);
@@ -248,78 +269,96 @@ class OrmServiceProvider implements ServiceProviderInterface
         });
 
         $container['orm.cache.factory.backing_memcached'] = $container->protect(function () {
-            return new \Memcached();
+            return new Memcached();
         });
 
         $container['orm.cache.factory.memcached'] = $container->protect(function ($cacheOptions) use ($container) {
             if (empty($cacheOptions['host']) || empty($cacheOptions['port'])) {
-                throw new \RuntimeException('Host and port options need to be specified for memcached cache');
+                throw new RuntimeException('Host and port options need to be specified for memcached cache');
             }
 
-            /** @var \Memcached $memcached */
-            $memcached = $container['orm.cache.factory.backing_memcached']();
+            /** @var callable $memcachedCacheFactory */
+            $memcachedCacheFactory = $container['orm.cache.factory.backing_memcached'];
+
+            /** @var Memcached $memcached */
+            $memcached = $memcachedCacheFactory();
             $memcached->addServer($cacheOptions['host'], $cacheOptions['port']);
 
-            $cache = new MemcachedCache();
-            $cache->setMemcached($memcached);
-
-            return $cache;
+            return DoctrineProvider::wrap(new MemcachedAdapter($memcached));
         });
 
         $container['orm.cache.factory.backing_redis'] = $container->protect(function () {
-            return new \Redis();
+            return new Redis();
         });
 
         $container['orm.cache.factory.redis'] = $container->protect(function ($cacheOptions) use ($container) {
             if (empty($cacheOptions['host']) || empty($cacheOptions['port'])) {
-                throw new \RuntimeException('Host and port options need to be specified for redis cache');
+                throw new RuntimeException('Host and port options need to be specified for redis cache');
             }
 
-            /** @var \Redis $redis */
-            $redis = $container['orm.cache.factory.backing_redis']();
+            /** @var callable $redisCacheFactory */
+            $redisCacheFactory = $container['orm.cache.factory.backing_redis'];
+
+            /** @var Redis $redis */
+            $redis = $redisCacheFactory();
             $redis->connect($cacheOptions['host'], $cacheOptions['port']);
 
-            $cache = new RedisCache();
-            $cache->setRedis($redis);
-
-            return $cache;
+            return DoctrineProvider::wrap(new RedisAdapter($redis));
         });
 
         $container['orm.cache.factory.array'] = $container->protect(function () {
-            return new ArrayCache();
+            return DoctrineProvider::wrap(new ArrayAdapter());
         });
 
         $container['orm.cache.factory.apcu'] = $container->protect(function () {
-            return new ApcuCache();
+            return DoctrineProvider::wrap(new ApcuAdapter());
         });
 
         $container['orm.cache.factory.filesystem'] = $container->protect(function ($cacheOptions) {
             if (empty($cacheOptions['path'])) {
-                throw new \RuntimeException('FilesystemCache path not defined');
+                throw new RuntimeException('FilesystemCache path not defined');
             }
 
-            return new FilesystemCache($cacheOptions['path']);
+            return DoctrineProvider::wrap(new FilesystemAdapter('', 0, $cacheOptions['path']));
         });
 
         $container['orm.cache.factory'] = $container->protect(function ($driver, $cacheOptions) use ($container) {
             switch ($driver) {
                 case 'apcu':
-                    return $container['orm.cache.factory.apcu']();
+                    /** @var callable $apcuCacheFactory */
+                    $apcuCacheFactory = $container['orm.cache.factory.apcu'];
+
+                    return $apcuCacheFactory();
                 case 'array':
-                    return $container['orm.cache.factory.array']();
+                    /** @var callable $arrayCacheFactory */
+                    $arrayCacheFactory = $container['orm.cache.factory.array'];
+
+                    return $arrayCacheFactory();
                 case 'filesystem':
-                    return $container['orm.cache.factory.filesystem']($cacheOptions);
+                    /** @var callable $filesystemCacheFactory */
+                    $filesystemCacheFactory = $container['orm.cache.factory.filesystem'];
+
+                    return $filesystemCacheFactory($cacheOptions);
                 case 'memcached':
-                    return $container['orm.cache.factory.memcached']($cacheOptions);
+                    /** @var callable $memcachedCacheFactory */
+                    $memcachedCacheFactory = $container['orm.cache.factory.memcached'];
+
+                    return $memcachedCacheFactory($cacheOptions);
                 case 'redis':
-                    return $container['orm.cache.factory.redis']($cacheOptions);
+                    /** @var callable $redisCacheFactory */
+                    $redisCacheFactory = $container['orm.cache.factory.redis'];
+
+                    return $redisCacheFactory($cacheOptions);
                 default:
-                    throw new \RuntimeException("Unsupported cache type '$driver' specified");
+                    throw new RuntimeException("Unsupported cache type '$driver' specified");
             }
         });
 
-        $container['orm.mapping_driver_chain.locator'] = $container->protect(function ($name = null) use ($container) {
-            $container['orm.ems.options.initializer']();
+        /** @var callable $optionsInitializer */
+        $optionsInitializer = $container['orm.ems.options.initializer'];
+
+        $container['orm.mapping_driver_chain.locator'] = $container->protect(function ($name = null) use ($container, $optionsInitializer) {
+            $optionsInitializer();
 
             if ($name === null) {
                 $name = $container['orm.ems.default'];
@@ -330,22 +369,28 @@ class OrmServiceProvider implements ServiceProviderInterface
                 return $container[$cacheInstanceKey];
             }
 
-            return $container[$cacheInstanceKey] = $container['orm.mapping_driver_chain.factory']($name);
+            /** @var callable $mappingDriverChainFactory */
+            $mappingDriverChainFactory = $container['orm.mapping_driver_chain.factory'];
+
+            return $container[$cacheInstanceKey] = $mappingDriverChainFactory($name);
         });
 
         $container['orm.mapping_driver_chain.factory'] = $container->protect(function ($name) {
             return new MappingDriverChain();
         });
 
-        $container['orm.add_mapping_driver'] = $container->protect(function (MappingDriver $mappingDriver, $namespace, $name = null) use ($container): void {
-            $container['orm.ems.options.initializer']();
+        $container['orm.add_mapping_driver'] = $container->protect(function (MappingDriver $mappingDriver, $namespace, $name = null) use ($container, $optionsInitializer): void {
+            $optionsInitializer();
 
             if ($name === null) {
                 $name = $container['orm.ems.default'];
             }
 
+            /** @var callable $mappingDriverChainLocator */
+            $mappingDriverChainLocator = $container['orm.mapping_driver_chain.locator'];
+
             /** @var MappingDriverChain $driverChain */
-            $driverChain = $container['orm.mapping_driver_chain.locator']($name);
+            $driverChain = $mappingDriverChainLocator($name);
             $driverChain->addDriver($mappingDriver, $namespace);
         });
 
@@ -381,9 +426,9 @@ class OrmServiceProvider implements ServiceProviderInterface
     /**
      * Get default ORM configuration settings.
      *
-     * @return array
+     * @return mixed[]
      */
-    protected function getOrmDefaults()
+    protected function getOrmDefaults(): array
     {
         return [
             'orm.proxies_dir' => __DIR__ . '/../../../../../../../../cache/doctrine/proxies',

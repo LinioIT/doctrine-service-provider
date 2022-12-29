@@ -5,13 +5,16 @@
     "type": "library",
     "license": "BSD-3-Clause",
     "require": {
-        "php": ">=7.1",
-        "pimple/pimple": "~3.2",
-        "doctrine/orm": "~2.6"
+        "php": "^8.1",
+        "pimple/pimple": "^3.5",
+        "doctrine/orm": "^2.13",
+        "symfony/cache": "^6.2"
     },
     "require-dev": {
-        "phpunit/phpunit": "~4.8",
-        "friendsofphp/php-cs-fixer": "^2.14"
+        "phpunit/phpunit": "^9.5",
+        "friendsofphp/php-cs-fixer": "3.13",
+        "phpstan/phpstan": "^1.9",
+        "phpstan/phpstan-mockery": "^1.1"
     },
     "suggest": {
         "ext-memcached": "Allows usage of Memcached.",
@@ -29,12 +32,16 @@
         }
     },
     "scripts": {
-        "test": [
+        "check": [
             "@lint:check",
-            "@phpunit"
+            "@static-analysis",
+            "@test"
         ],
-        "phpunit": "vendor/bin/phpunit --verbose",
-        "lint": "php-cs-fixer fix --verbose --show-progress=estimating",
-        "lint:check": "php-cs-fixer fix --dry-run --verbose --show-progress=estimating"
+        "test": "vendor/bin/phpunit --verbose",
+        "lint": "php-cs-fixer fix --verbose --show-progress=dots",
+        "lint:check": "php-cs-fixer fix --dry-run --verbose --show-progress=dots",
+        "static-analysis": [
+            "phpstan analyse --ansi --memory-limit=-1"
+        ]
     }
 }

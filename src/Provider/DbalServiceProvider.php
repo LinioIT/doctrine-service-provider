@@ -35,9 +35,15 @@ class DbalServiceProvider implements ServiceProviderInterface
                 $app['dbs.options'] = ['default' => $app['db.options'] ?? []];
             }
 
+            /** @var mixed[] $tmp */
             $tmp = $app['dbs.options'];
+
+            /** @var mixed[] $defaultOptions */
+            $defaultOptions = $app['db.default_options'];
+
+            /** @var mixed[] $options */
             foreach ($tmp as $name => &$options) {
-                $options = array_replace($app['db.default_options'], $options);
+                $options = array_replace($defaultOptions, $options);
 
                 if (!isset($app['dbs.default'])) {
                     $app['dbs.default'] = $name;
